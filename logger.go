@@ -40,6 +40,17 @@ func SetOutput(out io.Writer) {
 	logger.Out = out
 }
 
+// Configure ...
+func Configure(name string, out io.Writer) error {
+    levelCode, err := getLevelCode(name)
+    if err != nil {
+        return err
+    }
+    logger.Level = levelCode
+    logger.Out = out
+    return nil
+}
+
 // Debug ...
 func Debug(obj ...interface{}) {
 	if logger.Level <= levelDebugCode {
