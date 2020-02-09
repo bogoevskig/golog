@@ -5,33 +5,60 @@ import (
 	"strings"
 )
 
-// ...
+type level int
+
 const (
-	levelDebugCode = 1
-	levelDebugName = "DEBUG"
-	levelInfoCode  = 2
-	levelInfoName  = "INFO"
-	levelWarnCode  = 3
-	levelWarnName  = "WARN"
-	levelErrorCode = 4
-	levelErrorName = "ERROR"
-	levelOffCode   = 10
-	levelOffName   = "OFF"
+	traceLevelName = "TRACE"
+	debugLevelName = "DEBUG"
+	infoLevelName  = "INFO"
+	warnLevelName  = "WARN"
+	errorLevelName = "ERROR"
+	offLevelName   = "OFF"
 )
 
-// GetLevelCode returns level code from string or error if string is unknown
-func getLevelCode(name string) (int, error) {
-	switch strings.ToUpper(name) {
-	case levelDebugName:
-		return levelDebugCode, nil
-	case levelInfoName:
-		return levelInfoCode, nil
-	case levelWarnName:
-		return levelWarnCode, nil
-	case levelErrorName:
-		return levelErrorCode, nil
-	case levelOffName:
-		return levelOffCode, nil
+const (
+	traceLevelCode level = iota
+	debugLevelCode
+	infoLevelCode
+	warnLevelCode
+	errorLevelCode
+	offLevelCode
+)
+
+var names = map[level]string{
+	traceLevelCode: traceLevelName,
+	debugLevelCode: debugLevelName,
+	infoLevelCode:  infoLevelName,
+	warnLevelCode:  warnLevelName,
+	errorLevelCode: errorLevelName,
+	offLevelCode:   offLevelName,
+}
+
+var codes = map[string]level{
+	traceLevelName: traceLevelCode,
+	debugLevelName: debugLevelCode,
+	infoLevelName:  infoLevelCode,
+	warnLevelName:  warnLevelCode,
+	errorLevelName: errorLevelCode,
+	offLevelName:   offLevelCode,
+}
+
+func (l level) name() string {
+	return names[l]
+}
+
+func getLevelOrDefault(s string, d level) level {
+	lvl, err := getLevel(s)
+	if err != nil {
+		return d
 	}
-	return 0, fmt.Errorf("invalid level name: %s", name)
+	return lvl
+}
+
+func getLevel(s string) (level, error) {
+	lvl, ok := codes[strings.ToUpper(s)]
+	if !ok {
+		return 0, fmt.Errorf("unsupported logging level string '%s'", s)
+	}
+	return lvl, nil
 }

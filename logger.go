@@ -9,127 +9,119 @@ import (
 	"time"
 )
 
+const (
+	envLevel = "LOGGING_LEVEL"
+
+	separator  = " "
+	timeFormat = time.RFC3339Nano
+)
+
 var (
-	logger = &Logger{Level: levelInfoCode, Out: os.Stdout}
-	buffer = sync.Pool{
+	log logger
+	buf sync.Pool
+)
+
+type logger struct {
+	lvl level
+	out io.Writer
+	mux sync.Mutex
+}
+
+func init() {
+	lvl := getLevelOrDefault(os.Getenv(envLevel), infoLevelCode)
+	log = logger{lvl: lvl, out: os.Stdout}
+	buf = sync.Pool{
 		New: func() interface{} {
 			return new(bytes.Buffer)
 		},
 	}
-)
-
-// Logger ..
-type Logger struct {
-	Level int
-	Out   io.Writer
-	mutex sync.Mutex
 }
 
-// SetLevel ...
-func SetLevel(name string) error {
-	levelCode, err := getLevelCode(name)
+// SetLevel changes log level at runtime
+func SetLevel(s string) error {
+	lvl, err := getLevel(s)
 	if err != nil {
 		return err
 	}
-	logger.Level = levelCode
+
+	log.lvl = lvl
 	return nil
 }
 
-// SetOutput ...
-func SetOutput(out io.Writer) {
-	logger.Out = out
+// Trace writes a message with level trace
+func Trace(obj ...interface{}) {
+	write(traceLevelCode, fmt.Sprint(obj...))
 }
 
-// Configure ...
-func Configure(name string, out io.Writer) error {
-    levelCode, err := getLevelCode(name)
-    if err != nil {
-        return err
-    }
-    logger.Level = levelCode
-    logger.Out = out
-    return nil
+// Tracef writes a message with level trace
+func Tracef(msg string, args ...interface{}) {
+	write(traceLevelCode, fmt.Sprintf(msg, args...))
 }
 
-// Debug ...
+// Debug writes a message with level debug
 func Debug(obj ...interface{}) {
-	if logger.Level <= levelDebugCode {
-		log(levelDebugName, fmt.Sprint(obj...))
-	}
+	write(debugLevelCode, fmt.Sprint(obj...))
 }
 
-// Info ...
-func Info(obj ...interface{}) {
-	if logger.Level <= levelInfoCode {
-		log(levelInfoName, fmt.Sprint(obj...))
-	}
-}
-
-// Warn ...
-func Warn(obj ...interface{}) {
-	if logger.Level <= levelWarnCode {
-		log(levelWarnName, fmt.Sprint(obj...))
-	}
-}
-
-// Error ...
-func Error(obj ...interface{}) {
-	if logger.Level <= levelErrorCode {
-		log(levelErrorName, fmt.Sprint(obj...))
-	}
-}
-
-// Debugf ...
+// Debugf writes a message with level debug
 func Debugf(msg string, args ...interface{}) {
-	if logger.Level <= levelDebugCode {
-		log(levelDebugName, fmt.Sprintf(msg, args...))
-	}
+	write(debugLevelCode, fmt.Sprintf(msg, args...))
 }
 
-// Infof ...
+// Info writes a message with level info
+func Info(obj ...interface{}) {
+	write(infoLevelCode, fmt.Sprint(obj...))
+}
+
+// Infof writes a message with level info
 func Infof(msg string, args ...interface{}) {
-	if logger.Level <= levelInfoCode {
-		log(levelInfoName, fmt.Sprintf(msg, args...))
-	}
+	write(infoLevelCode, fmt.Sprintf(msg, args...))
 }
 
-// Warnf ...
+// Warn writes a message with level warn
+func Warn(obj ...interface{}) {
+	write(warnLevelCode, fmt.Sprint(obj...))
+}
+
+// Warnf writes a message with level warn
 func Warnf(msg string, args ...interface{}) {
-	if logger.Level <= levelWarnCode {
-		log(levelWarnName, fmt.Sprintf(msg, args...))
-	}
+	write(warnLevelCode, fmt.Sprintf(msg, args...))
 }
 
-// Errorf ...
+// Error writes a message with level error
+func Error(obj ...interface{}) {
+	write(errorLevelCode, fmt.Sprint(obj...))
+}
+
+// Errorf writes a message with level error
 func Errorf(msg string, args ...interface{}) {
-	if logger.Level <= levelErrorCode {
-		log(levelErrorName, fmt.Sprintf(msg, args...))
+	write(errorLevelCode, fmt.Sprintf(msg, args...))
+}
+
+func write(lvl level, msg string) {
+	if lvl < log.lvl {
+		return
+	}
+
+	log.mux.Lock()
+	defer log.mux.Unlock()
+
+	if _, err := log.out.Write(format(lvl, msg)); err != nil {
+		fmt.Fprintf(os.Stderr, "logger.write failed with error: %v", err)
 	}
 }
 
-func log(lvl string, msg string) {
-	line := format(lvl, msg)
-
-	logger.mutex.Lock()
-	defer logger.mutex.Unlock()
-
-	if _, err := logger.Out.Write(line); err != nil {
-		fmt.Fprintf(os.Stderr, "logger.log failed: %v", err)
-	}
-}
-
-func format(lvl string, msg string) []byte {
-	b := buffer.Get().(*bytes.Buffer)
+func format(lvl level, msg string) []byte {
+	b := buf.Get().(*bytes.Buffer)
 	b.Reset()
-	defer buffer.Put(b)
+	defer buf.Put(b)
 
-	timeStr := time.Now().Format("2006-01-02T15:04:05.000000-0700")
-	b.WriteString(timeStr)
+	b.WriteString(time.Now().Format(timeFormat))
 
-	b.WriteByte(' ')
-	b.WriteString(lvl)
+	b.WriteString(separator)
+	b.WriteString(lvl.name())
 
-	b.WriteByte(' ')
+	b.WriteString(separator)
 	b.WriteString(msg)
 
 	b.WriteByte('\n')
